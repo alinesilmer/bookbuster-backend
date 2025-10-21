@@ -1,0 +1,30 @@
+{
+  "name": "bookbuster-backend",
+  "version": "1.0.0",
+  "description": "Backend for Bookbuster library management system",
+  "keywords": [
+    "library",
+    "firebase",
+    "express"
+  ],
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "latest",
+    "cookie-parser": "^1.4.7",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "express-validator": "latest",
+    "firebase-admin": "latest"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
