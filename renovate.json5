@@ -1,0 +1,60 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:base"],
+  "timezone": "America/Argentina/Cordoba",
+
+  // i) Weekly: open PRs before 08:00 AR every Monday
+  "schedule": ["before 8am on Monday"],
+
+  // Noise control
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 10,
+
+  // Keep lockfiles fresh
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 8am on Monday"]
+  },
+
+  // Managers we use
+  "enabledManagers": ["npm", "github-actions"],
+
+  // >>> Requested addition <<<
+  "npm": {
+    "ignorePaths": ["**/node_modules/**"]
+  },
+
+  // Commit style
+  "semanticCommits": "enabled",
+
+  // Version bump strategy
+  "rangeStrategy": "bump",
+
+  // Package-specific policies
+  "packageRules": [
+    {
+      "description": "Automerge devDependencies (minor/patch)",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "automerge": true
+    },
+    {
+      "description": "Group React/Next and hold majors",
+      "matchPackageNames": ["react", "react-dom", "next"],
+      "separateMajorMinor": true,
+      "matchUpdateTypes": ["major"],
+      "enabled": false,
+      "labels": ["major-hold"]
+    },
+    {
+      "description": "Extra care for firebase-admin and express",
+      "matchPackageNames": ["firebase-admin", "express"],
+      "stabilityDays": 3,
+      "labels": ["needs-manual-check"]
+    }
+  ],
+
+  // Labels & reviewers
+  "labels": ["dependencies"],
+  "reviewers": ["tu-usuario-github"]
+}
