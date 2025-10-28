@@ -1,64 +1,49 @@
 import { db } from "../config/firebase.js";
-import {
-  COLLECTIONS,
-  ESTADO_PRESTAMO,
-  ESTADO_MULTA,
-} from "../config/constants.js";
+import { COLLECTIONS } from "../config/constants.js";
 
-export const getSocioByUsuarioId = async (req, res) => {
+export const listSocios = async (_req, res) => {
   try {
-    const { userId } = req.params;
-    const snap = await db
-      .collection(COLLECTIONS.SOCIOS)
-      .where("usuario_id", "==", userId)
-      .limit(1)
-      .get();
-    if (snap.empty) return res.status(404).json({ error: "Socio not found" });
-    const doc = snap.docs[0];
-    res.json({ id: doc.id, ...doc.data() });
+    const snap = await db.collection(COLLECTIONS.SOCIOS).get();
+    const uniq = new Map();
+    const out = [];
+
+    for (const d of snap.docs) {
+      const s = { id: d.id, ...d.data() };
+      const key = s.usuario_id || d.id;
+      if (uniq.has(key)) continue;
+      uniq.set(key, true);
+
+      let usuario = null;
+      if (s.usuario_id) {
+        const ud = await db.collection(COLLECTIONS.USUARIOS).doc(s.usuario_id).get();
+        usuario = ud.exists ? ud.data() : null;
+      }
+
+      out.push({
+        id: s.id,
+        usuario_id: s.usuario_id,
+        nombre: usuario?.nombre ?? "-",
+        email: usuario?.email ?? "-",
+        activo: usuario?.activo ?? true,
+        prestamos_activos: s.prestamos_activos ?? 0,
+        multas_pendientes: s.multas_pendientes ?? 0,
+        nro_socio: s.nro_socio ?? usuario?.nro_socio ?? null,
+      });
+    }
+
+    res.json(out);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 };
 
-export const listSocios = async (_req, res) => {
+export const getSocioByUsuarioId = async (req, res) => {
   try {
-    const sociosSnap = await db.collection(COLLECTIONS.SOCIOS).get();
-    const out = [];
-    for (const s of sociosSnap.docs) {
-      const socio = s.data();
-      const userDoc = await db
-        .collection(COLLECTIONS.USUARIOS)
-        .doc(socio.usuario_id)
-        .get();
-      if (!userDoc.exists) continue;
-      const u = userDoc.data();
-      const prestamosSnap = await db
-        .collection(COLLECTIONS.PRESTAMOS)
-        .where("socio_id", "==", s.id)
-        .where("estado", "==", ESTADO_PRESTAMO.ACTIVO)
-        .get();
-      const multasSnap = await db
-        .collection(COLLECTIONS.MULTAS)
-        .where("socio_id", "==", s.id)
-        .get();
-      let deuda = 0;
-      multasSnap.forEach((m) => {
-        const d = m.data();
-        if (d.estado !== ESTADO_MULTA.PAGADA) deuda += Number(d.monto || 0);
-      });
-      out.push({
-        id: s.id,
-        usuario_id: socio.usuario_id,
-        dni: socio.dni || null,
-        nombre: u.nombre,
-        email: u.email,
-        activo: u.activo !== false,
-        prestamos_activos: prestamosSnap.size,
-        multas_pendientes: deuda,
-      });
-    }
-    res.json(out);
+    const { userId } = req.params;
+    const snap = await db.collection(COLLECTIONS.SOCIOS).where("usuario_id", "==", userId).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: "Socio no encontrado" });
+    const doc = snap.docs[0];
+    res.json({ id: doc.id, ...doc.data() });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

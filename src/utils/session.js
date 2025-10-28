@@ -5,7 +5,7 @@ import { COLLECTIONS } from "../config/constants.js";
 export async function createSession(user) {
   const token = crypto.randomBytes(24).toString("hex");
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 7); // 7d
+  const expiresAt = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 7); 
 
   await db
     .collection(COLLECTIONS.SESIONES)

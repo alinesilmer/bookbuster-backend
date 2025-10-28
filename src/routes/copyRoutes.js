@@ -1,36 +1,16 @@
 import express from "express";
-import { body } from "express-validator";
-import {
-  getAllCopies,
-  getCopyById,
-  createCopy,
-  updateCopy,
-  deleteCopy,
-} from "../controllers/copyController.js";
 import { authenticate, requireAdmin } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
+import { CreateCopyDTO, UpdateCopyDTO } from "../dto/copy.js";
+import { getAllCopies, getCopyById, createCopy, updateCopy, deleteCopy } from "../controllers/copyController.js";
 
 const router = express.Router();
 
-// Public
 router.get("/", getAllCopies);
 router.get("/:id", getCopyById);
-
-// Admin
-router.post(
-  "/",
-  authenticate,
-  requireAdmin,
-  [
-    body("libro_id").notEmpty().withMessage("Book ID is required"),
-    body("editorial_id").notEmpty().withMessage("Editorial ID is required"),
-    body("formato").notEmpty().withMessage("Format is required"),
-    validate,
-  ],
-  createCopy
-);
-
-router.put("/:id", authenticate, requireAdmin, updateCopy);
+//USO DE VALIDACIONES DTO para la creación de copias y actualización de copias
+router.post("/", authenticate, requireAdmin, CreateCopyDTO, validate, createCopy);
+router.patch("/:id", authenticate, requireAdmin, UpdateCopyDTO, validate, updateCopy);
 router.delete("/:id", authenticate, requireAdmin, deleteCopy);
 
 export default router;

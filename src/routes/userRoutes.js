@@ -12,7 +12,7 @@ const router = express.Router();
 
 router.use(authenticate);
 
-// Read
+// Leer
 router.get("/:id", (req, res, next) => {
   if (req.params.id !== req.user.id) {
     return res.status(403).json({ error: "No autorizado" });
@@ -20,7 +20,7 @@ router.get("/:id", (req, res, next) => {
   return getUserById(req, res, next);
 });
 
-// Update
+// actualizar
 router.put(
   "/:id",
   [
@@ -40,7 +40,7 @@ router.put(
   }
 );
 
-// Delete
+// eliminar
 router.delete("/:id", (req, res, next) => {
   if (req.params.id !== req.user.id) {
     return res.status(403).json({ error: "No autorizado" });

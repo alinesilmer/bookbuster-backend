@@ -1,61 +1,53 @@
 import { db } from "../config/firebase.js";
-import {
-  COLLECTIONS,
-  ESTADO_COPIA,
-  FORMATO_COPIA,
-} from "../config/constants.js";
+import { COLLECTIONS, ESTADO_COPIA, FORMATO_COPIA } from "../config/constants.js";
+
+const normalizeFormato = (v) => {
+  if (!v) return null;
+  const s = String(v).trim().toUpperCase();
+  const map = {
+    "FISICO": "FISICO",
+    "FÍSICO": "FISICO",
+    "PAPEL": "FISICO",
+    "IMPRESO": "FISICO",
+    "PDF": "PDF",
+    "EPUB": "EPUB",
+    "E-PUB": "EPUB",
+    "AUDIOBOOK": "AUDIOBOOK",
+    "AUDIOLIBRO": "AUDIOBOOK",
+    "AUDIO": "AUDIOBOOK",
+    "DIGITAL": "PDF",
+  };
+  return map[s] || null;
+};
 
 export const getAllCopies = async (req, res) => {
   try {
     const { libro_id } = req.query;
     let query = db.collection(COLLECTIONS.COPIAS);
+    if (libro_id) query = query.where("libro_id", "==", libro_id);
 
-    if (libro_id) {
-      query = query.where("libro_id", "==", libro_id);
-    }
+    const snap = await query.get();
+    const out = [];
 
-    const copiesSnapshot = await query.get();
-    const copies = [];
+    for (const doc of snap.docs) {
+      const data = doc.data();
 
-    for (const doc of copiesSnapshot.docs) {
-      const copyData = doc.data();
-
-      // Get book info
       let bookInfo = null;
-      if (copyData.libro_id) {
-        const bookDoc = await db
-          .collection(COLLECTIONS.LIBROS)
-          .doc(copyData.libro_id)
-          .get();
-        if (bookDoc.exists) {
-          bookInfo = { id: bookDoc.id, titulo: bookDoc.data().titulo };
-        }
+      if (data.libro_id) {
+        const b = await db.collection(COLLECTIONS.LIBROS).doc(data.libro_id).get();
+        if (b.exists) bookInfo = { id: b.id, titulo: b.data().titulo };
       }
 
-      // Get editorial info
       let editorialInfo = null;
-      if (copyData.editorial_id) {
-        const editorialDoc = await db
-          .collection(COLLECTIONS.EDITORIALES)
-          .doc(copyData.editorial_id)
-          .get();
-        if (editorialDoc.exists) {
-          editorialInfo = {
-            id: editorialDoc.id,
-            nombre: editorialDoc.data().nombre,
-          };
-        }
+      if (data.editorial_id) {
+        const e = await db.collection(COLLECTIONS.EDITORIALES).doc(data.editorial_id).get();
+        if (e.exists) editorialInfo = { id: e.id, nombre: e.data().nombre };
       }
 
-      copies.push({
-        id: doc.id,
-        ...copyData,
-        libro: bookInfo,
-        editorial: editorialInfo,
-      });
+      out.push({ id: doc.id, ...data, libro: bookInfo, editorial: editorialInfo });
     }
 
-    res.json(copies);
+    res.json(out);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -64,44 +56,24 @@ export const getAllCopies = async (req, res) => {
 export const getCopyById = async (req, res) => {
   try {
     const { id } = req.params;
-    const copyDoc = await db.collection(COLLECTIONS.COPIAS).doc(id).get();
+    const doc = await db.collection(COLLECTIONS.COPIAS).doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Copia no encontrada" });
 
-    if (!copyDoc.exists) {
-      return res.status(404).json({ error: "Copia no encontrada" });
-    }
+    const data = doc.data();
 
-    const copyData = copyDoc.data();
-
-    // Get book info
     let bookInfo = null;
-    if (copyData.libro_id) {
-      const bookDoc = await db
-        .collection(COLLECTIONS.LIBROS)
-        .doc(copyData.libro_id)
-        .get();
-      if (bookDoc.exists) {
-        bookInfo = { id: bookDoc.id, ...bookDoc.data() };
-      }
+    if (data.libro_id) {
+      const b = await db.collection(COLLECTIONS.LIBROS).doc(data.libro_id).get();
+      if (b.exists) bookInfo = { id: b.id, ...b.data() };
     }
 
-    // Get editorial info
     let editorialInfo = null;
-    if (copyData.editorial_id) {
-      const editorialDoc = await db
-        .collection(COLLECTIONS.EDITORIALES)
-        .doc(copyData.editorial_id)
-        .get();
-      if (editorialDoc.exists) {
-        editorialInfo = { id: editorialDoc.id, ...editorialDoc.data() };
-      }
+    if (data.editorial_id) {
+      const e = await db.collection(COLLECTIONS.EDITORIALES).doc(data.editorial_id).get();
+      if (e.exists) editorialInfo = { id: e.id, ...e.data() };
     }
 
-    res.json({
-      id: copyDoc.id,
-      ...copyData,
-      libro: bookInfo,
-      editorial: editorialInfo,
-    });
+    res.json({ id: doc.id, ...data, libro: bookInfo, editorial: editorialInfo });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -111,37 +83,27 @@ export const createCopy = async (req, res) => {
   try {
     const { libro_id, editorial_id, isbn, edicion, formato } = req.body;
 
-    const bookDoc = await db.collection(COLLECTIONS.LIBROS).doc(libro_id).get();
-    if (!bookDoc.exists) {
-      return res.status(404).json({ error: "Libro no encontrado" });
-    }
+    const b = await db.collection(COLLECTIONS.LIBROS).doc(libro_id).get();
+    if (!b.exists) return res.status(404).json({ error: "Libro no encontrado" });
 
-    const editorialDoc = await db
-      .collection(COLLECTIONS.EDITORIALES)
-      .doc(editorial_id)
-      .get();
-    if (!editorialDoc.exists) {
-      return res.status(404).json({ error: "Editorial no encontrada" });
-    }
+    const e = await db.collection(COLLECTIONS.EDITORIALES).doc(editorial_id).get();
+    if (!e.exists) return res.status(404).json({ error: "Editorial no encontrada" });
 
-    // Validate formato
-    if (!Object.values(FORMATO_COPIA).includes(formato)) {
+    const fmt = normalizeFormato(formato);
+    if (!fmt || !Object.values(FORMATO_COPIA).includes(fmt)) {
       return res.status(400).json({ error: "formato inválido" });
     }
 
-    const copyRef = await db.collection(COLLECTIONS.COPIAS).add({
+    const ref = await db.collection(COLLECTIONS.COPIAS).add({
       libro_id,
       editorial_id,
       isbn: isbn || null,
       edicion: edicion || null,
-      formato,
+      formato: fmt,
       estado: ESTADO_COPIA.DISPONIBLE,
     });
 
-    res.status(201).json({
-      message: "Copy created successfully",
-      id: copyRef.id,
-    });
+    res.status(201).json({ message: "Copy created successfully", id: ref.id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -152,52 +114,42 @@ export const updateCopy = async (req, res) => {
     const { id } = req.params;
     const { libro_id, editorial_id, isbn, edicion, formato, estado } = req.body;
 
-    const copyDoc = await db.collection(COLLECTIONS.COPIAS).doc(id).get();
-    if (!copyDoc.exists) {
-      return res.status(404).json({ error: "Copia no encontrada" });
-    }
+    const doc = await db.collection(COLLECTIONS.COPIAS).doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Copia no encontrada" });
 
-    const updateData = {};
+    const patch = {};
 
     if (libro_id) {
-      const bookDoc = await db
-        .collection(COLLECTIONS.LIBROS)
-        .doc(libro_id)
-        .get();
-      if (!bookDoc.exists) {
-        return res.status(404).json({ error: "Book not found" });
-      }
-      updateData.libro_id = libro_id;
+      const b = await db.collection(COLLECTIONS.LIBROS).doc(libro_id).get();
+      if (!b.exists) return res.status(404).json({ error: "Libro no encontrado" });
+      patch.libro_id = libro_id;
     }
 
     if (editorial_id) {
-      const editorialDoc = await db
-        .collection(COLLECTIONS.EDITORIALES)
-        .doc(editorial_id)
-        .get();
-      if (!editorialDoc.exists) {
-        return res.status(404).json({ error: "Editorial no encontrada" });
-      }
-      updateData.editorial_id = editorial_id;
+      const e = await db.collection(COLLECTIONS.EDITORIALES).doc(editorial_id).get();
+      if (!e.exists) return res.status(404).json({ error: "Editorial no encontrada" });
+      patch.editorial_id = editorial_id;
     }
 
-    if (isbn !== undefined) updateData.isbn = isbn;
-    if (edicion !== undefined) updateData.edicion = edicion;
-    if (formato) {
-      if (!Object.values(FORMATO_COPIA).includes(formato)) {
+    if (isbn !== undefined) patch.isbn = isbn;
+    if (edicion !== undefined) patch.edicion = edicion;
+
+    if (formato !== undefined) {
+      const fmt = normalizeFormato(formato);
+      if (!fmt || !Object.values(FORMATO_COPIA).includes(fmt)) {
         return res.status(400).json({ error: "formato inválido" });
       }
-      updateData.formato = formato;
+      patch.formato = fmt;
     }
-    if (estado) {
+
+    if (estado !== undefined) {
       if (!Object.values(ESTADO_COPIA).includes(estado)) {
         return res.status(400).json({ error: "estado inválido" });
       }
-      updateData.estado = estado;
+      patch.estado = estado;
     }
 
-    await db.collection(COLLECTIONS.COPIAS).doc(id).update(updateData);
-
+    await db.collection(COLLECTIONS.COPIAS).doc(id).update(patch);
     res.json({ message: "Copia actualizada exitosamente" });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -208,12 +160,10 @@ export const deleteCopy = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const copyDoc = await db.collection(COLLECTIONS.COPIAS).doc(id).get();
-    if (!copyDoc.exists) {
-      return res.status(404).json({ error: "Copia no encontrada" });
-    }
+    const copyRef = db.collection(COLLECTIONS.COPIAS).doc(id);
+    const copyDoc = await copyRef.get();
+    if (!copyDoc.exists) return res.status(404).json({ error: "Copia no encontrada" });
 
-    // Check if copy has active loans
     const activeLoans = await db
       .collection(COLLECTIONS.PRESTAMOS)
       .where("copia_id", "==", id)
@@ -221,13 +171,10 @@ export const deleteCopy = async (req, res) => {
       .get();
 
     if (!activeLoans.empty) {
-      return res
-        .status(400)
-        .json({ error: "No se puede eliminar una copia con préstamo activo" });
+      return res.status(400).json({ error: "No se puede eliminar una copia con préstamo activo" });
     }
 
-    await db.collection(COLLECTIONS.COPIAS).doc(id).delete();
-
+    await copyRef.delete();
     res.json({ message: "copia eliminada exitosamente" });
   } catch (error) {
     res.status(500).json({ error: error.message });
